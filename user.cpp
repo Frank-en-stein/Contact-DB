@@ -1,7 +1,7 @@
 //#include <iostream>
 //using namespace std;
 
-#define MOD 500007
+#define MOD 100007
 #define BASE 257
 
 typedef unsigned long long ull;
@@ -88,13 +88,14 @@ public:
 		while (curr) {
 			lnode* tmp = curr;
 			curr = curr->next;
-			delete tmp;
+			//delete tmp;
 		}
 	}
 	void insert(record* r) {
 		lnode* tmp = new lnode();
 		tmp->data = r;
 		tmp->next = head;
+		if (head) head->prev = tmp;
 		head = tmp;
 		tmp->prev = nullptr;
 		this->count++;
@@ -105,8 +106,8 @@ public:
 		while (curr) {
 			lnode* tmp = curr;
 			curr = curr->next;
-			delete tmp->data;
-			delete tmp;
+			//delete tmp->data;
+			//delete tmp;
 		}
 	}
 	void soft_del() {
@@ -115,7 +116,7 @@ public:
 		while (curr) {
 			lnode* tmp = curr;
 			curr = curr->next;
-			delete tmp;
+			//delete tmp;
 		}
 	}
 };
@@ -136,11 +137,7 @@ public:
 		if (next) next->prev = this;
 	}
 
-	~hnode() {
-		delete records;
-	}
-
-	void del(hnode* arr) {
+	void del(hnode* &arr) {
 		if (this->next) next->prev = this->prev;
 		if (this->prev) prev->next = this->next;
 		else arr = this->next;
@@ -154,7 +151,7 @@ void delh(hnode* hn) {
 		delh(hn->next);
 		return;
 	}
-	delete hn;
+	//delete hn;
 }
 
 hnode* findh(hnode* arr[], char* str, int hh) {
@@ -184,6 +181,9 @@ void remove_refs(lnode* curr, FIELD excpt) {
 		record* r = curr->data;
 		for (int i = 0; i < 5; i++) if (i != excpt) if (r->hanchors[i]) if (r->lanchors[i]) {
 			if (r->lanchors[i]->next) r->lanchors[i]->next->prev = r->lanchors[i]->prev;
+			if (!r->lanchors[i]->prev) if (r->hanchors[i]->records->head != r->lanchors[i]) {
+				int u = 0;
+			}
 			if (r->lanchors[i]->prev) r->lanchors[i]->prev->next = r->lanchors[i]->next;
 			else r->hanchors[i]->records->head = r->lanchors[i]->next; //to check
 			r->hanchors[i]->records->count--;
@@ -231,22 +231,21 @@ int Change(FIELD field, char* str, FIELD changefield, char* changestr)
 	hnode* hn = findh(hashes[field], str, hh);
 	if (hn) if (hn->records->count > 0) {
 		res = hn->records->count;
-		list* nl = new list();
 		lnode* curr = hn->records->head;
+		int nhh = hash(changestr);
 		while (curr) {
-			nl->insert(curr->data);
-			curr = curr->next;
-		}
+			cpy(curr->data->data[changefield], changestr);
+			lnode* currln = curr->data->lanchors[changefield];
+			hnode* currhn = curr->data->hanchors[changefield];
 
-		remove_refs(hn->records->head, NONE);
-		hn->records->soft_del();
-		hn->del(hashes[field][hh]);
+			if (currln->next) currln->next->prev = currln->prev;
+			if (currln->prev) currln->prev->next = currln->next;
+			else currhn->records->head = curr->next;
+			currhn->records->count--;
 
-		curr = nl->head;
-		while (curr) {
-			record* rr = curr->data;
-			cpy(rr->data[changefield], changestr);
-			Add(rr->data[NAME], rr->data[NUMBER], rr->data[BIRTHDAY], rr->data[EMAIL], rr->data[MEMO]);
+			curr->data->hanchors[changefield] = inserth(hashes[changefield], curr->data, changestr);
+			curr->data->lanchors[changefield] = curr->data->hanchors[changefield]->records->head;
+
 			curr = curr->next;
 		}
 	}
@@ -261,7 +260,7 @@ RESULT Search(FIELD field, char* str, FIELD returnfield)
 
 	int hh = hash(str);
 	hnode* hn = findh(hashes[field], str, hh);
-	if (hn) {
+	if (hn) if (hn->records->count > 0) {
 		r.count = hn->records->count;
 		if (r.count == 1) {
 			cpy(r.str, hn->records->head->data->data[returnfield]);
