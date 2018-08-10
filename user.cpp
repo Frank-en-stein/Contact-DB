@@ -1,276 +1,193 @@
-//#include <iostream>
-//using namespace std;
+#define WIDTH	26
+#define HEIGHT	99
+#define LENGTH	200
+const int THRESHOLD = 100000007;
 
-#define MOD 100007
-#define BASE 257
+struct lnode {
+	lnode* next;
+	int val;
+};
+bool isin[HEIGHT][WIDTH];
 
-typedef unsigned long long ull;
+int compress(int l, int r) {
+	return (l <<= 16) | r;
+}
 
-typedef enum
-{
-	NAME,
-	NUMBER,
-	BIRTHDAY,
-	EMAIL,
-	MEMO,
-	NONE
-} FIELD;
+void decompress(int n, int &l, int &r) {
+	r = n & (0x00ff);
+	l = (n >> 16) & (0x00ff);
+}
 
-typedef struct
-{
-	int count;
-	char str[20];
-} RESULT;
+class Q {
+public:
+	lnode* head;
+	lnode* tail;
+	int count = 0;
+	Q() {
+		head = tail = nullptr;
+		count = 0;
+	}
+	void push(int n) {
+		int r, c;
+		decompress(n, r, c);
+		if(isin[r][c]) return;
+		isin[r][c] = 1;
+		lnode* tmp = new lnode();
+		tmp->val = n;
+		tmp->next = nullptr;
+		if (tail) tail->next = tmp;
+		else head = tmp;
+		tail = tmp;
+		count++;
+	}
+	lnode* pop() {
+		if (!head) return nullptr;
+		lnode* tmp = head;
+		int r, c;
+		decompress(head->val, r, c);
+		isin[r][c] = 0;
+		if (head) head = head->next;
+		if (!head) tail = nullptr;
+		count--;
+		return tmp;
+	}
+	void del(int n) {
+		lnode* curr = head;
+		lnode* prev = head;
+		while (curr) {
+			if (curr->val == n) {
+				count--;
+				if (prev) prev->next = curr->next;
+				else head = curr->next;
+				return;
+			}
+			prev = curr;
+			curr = curr->next;
+		}
+	}
+	void del() {
+		count = 0;
+		lnode* tmp = head;
+		while (head) {
+			tmp = head;
+			int r, c;
+			decompress(head->val, r, c);
+			isin[r][c] = 0;
+			head = head->next;
+			delete tmp;
+		}
+	}
+};
 
-////////////////////////////////////////////Utility///////////////////////////////////////////////////
+bool vis[HEIGHT][WIDTH];
+char exp[HEIGHT][WIDTH][LENGTH+1];
+Q* undet = nullptr;
 
-void cpy(char a[], char *b) {
-	int i;
+int str2num(char* str, int &len) {
+	int res = 0;
+	for (int i = str[0]=='-'; str[i] != 0 && str[i]>='0' && str[i]<='9'; i++) {
+		res *= 10;
+		res += str[i] - '0';
+		len++;
+	}
+	if (str[0] == '-') res *= -1;
+	return res;
+}
+
+void cpy(char a[], char* b) {
+	int i = 0;
 	for (i = 0; b[i] != 0; i++) a[i] = b[i];
 	a[i] = 0;
 }
 
-bool cmp(char* a, char* b) {
-	for (int i = 0;; i++)
-		if (a[i] == 0 && b[i] == 0) return true;
-		else if (a[i] != b[i]) return false;
-}
-
-int hash(char* str) {
-	ull hh = 0;
-	for (int i = 0; str[i] != 0; i++) {
-		char c = str[i];
-		hh = (hh*BASE + c) % MOD;
-	}
-	return (int)hh;
-}
-
-////////////////////////////////////////////Definitions///////////////////////////////////////////////////
-class lnode;
-class hnode;
-class record {
-public:
-	char data[5][31];
-
-	lnode* lanchors[5];
-	hnode* hanchors[5];
-
-	record(char* name, char* number, char* birthday, char* email, char* memo) {
-		cpy(data[NAME], name);
-		cpy(data[NUMBER], number);
-		cpy(data[BIRTHDAY], birthday);
-		cpy(data[EMAIL], email);
-		cpy(data[MEMO], memo);
-
-		for (int i = 0; i < 5; i++) {
-			lanchors[i] = nullptr; 
-			hanchors[i] = nullptr;
+bool eval(int r, int c, int value[HEIGHT][WIDTH]) {
+	if (vis[r][c]) return false;
+	bool flag = true;
+	vis[r][c] = 1;
+	char *eq = exp[r][c];
+	bool isPlus = true;
+	int expval = (eq[0] ? 0 : value[r][c]);
+	//if (eq[0] == 0) flag = false;
+	while (eq[0]) {
+		if (eq[0] == '-' || eq[0] == '+') {
+			isPlus = eq[0] == '+';
+			eq++;
+			continue;
 		}
-	}
-};
-
-class lnode {
-public:
-	lnode *prev, *next;
-	record* data;
-};
-
-class list {
-public:
-	lnode* head;
-	int count;
-	list() {
-		count = 0;
-		head = nullptr;
-	}
-	~list() {
-		lnode* curr = head;
-		while (curr) {
-			lnode* tmp = curr;
-			curr = curr->next;
-			//delete tmp;
-		}
-	}
-	void insert(record* r) {
-		lnode* tmp = new lnode();
-		tmp->data = r;
-		tmp->next = head;
-		if (head) head->prev = tmp;
-		head = tmp;
-		tmp->prev = nullptr;
-		this->count++;
-	}
-	void del() {
-		count = 0;
-		lnode* curr = head;
-		while (curr) {
-			lnode* tmp = curr;
-			curr = curr->next;
-			//delete tmp->data;
-			//delete tmp;
-		}
-	}
-	void soft_del() {
-		count = 0;
-		lnode* curr = head;
-		while (curr) {
-			lnode* tmp = curr;
-			curr = curr->next;
-			//delete tmp;
-		}
-	}
-};
-
-class hnode {
-public:
-	char key[31];
-	hnode* next;
-	hnode* prev;
-	list* records;
-
-	hnode(char* key, record* r, hnode* nxt, hnode* prv) {
-		cpy(this->key, key);
-		records = new list();
-		records->insert(r);
-		next = nxt;
-		prev = prv;
-		if (next) next->prev = this;
-	}
-
-	void del(hnode* &arr) {
-		if (this->next) next->prev = this->prev;
-		if (this->prev) prev->next = this->next;
-		else arr = this->next;
-	}
-};
-
-hnode *hashes[5][MOD];
-
-void delh(hnode* hn) {
-	if (hn) {
-		delh(hn->next);
-		return;
-	}
-	//delete hn;
-}
-
-hnode* findh(hnode* arr[], char* str, int hh) {
-	hnode* curr = arr[hh];
-	while (curr) {
-		if (cmp(str, curr->key)) break;
-		else curr = curr->next;
-	}
-	return curr;
-}
-
-hnode* inserth(hnode* arr[], record* r, char* str) {
-	int hh = hash(str);
-	hnode* tmp = findh(arr, str, hh);
-	if (!tmp) {
-		tmp = new hnode(str, r, arr[hh], nullptr);
-		arr[hh] = tmp;
-	}
-	else {
-		tmp->records->insert(r);
-	}
-	return tmp;
-}
-
-void remove_refs(lnode* curr, FIELD excpt) {
-	while (curr) {
-		record* r = curr->data;
-		for (int i = 0; i < 5; i++) if (i != excpt) if (r->hanchors[i]) if (r->lanchors[i]) {
-			if (r->lanchors[i]->next) r->lanchors[i]->next->prev = r->lanchors[i]->prev;
-			if (!r->lanchors[i]->prev) if (r->hanchors[i]->records->head != r->lanchors[i]) {
-				int u = 0;
+		int ev = 0;
+		if (eq[0] >= 'A' && eq[0] <= 'Z') {
+			int jmp = 0;
+			int cc = eq[0] - 'A';
+			int rr = str2num(++eq, jmp) - 1;
+			eq += jmp;
+			if (!eval(rr, cc, value)) {
+				flag = false;
+				undet->push(compress(rr, cc));
 			}
-			if (r->lanchors[i]->prev) r->lanchors[i]->prev->next = r->lanchors[i]->next;
-			else r->hanchors[i]->records->head = r->lanchors[i]->next; //to check
-			r->hanchors[i]->records->count--;
+			else ev = value[rr][cc];
 		}
-		curr = curr->next;
+		else {
+			int jmp = 0;
+			ev = str2num(eq, jmp);
+			eq += jmp;
+		}
+		expval = (isPlus ? expval + ev : expval - ev) % THRESHOLD;
 	}
+	if (flag) {
+		value[r][c] = expval;
+		if (isin[r][c]) undet->del(compress(r,c));
+		isin[r][c] = 0;
+	}
+	vis[r][c] = 0;
+	return flag;
 }
 
-void InitDB()
-{
-	for (int i = 0; i < MOD; i++) for(int j=0; j<5; j++) {
-		delh(hashes[j][i]);
-		hashes[j][i] = nullptr;
-	}
+void initTable() {
+	/*static bool ini = false;
+	if (!ini) {
+		for (int i = 0; i < 26; i++) for (int j = 0; j < 99; j++) vis[i][j] = 0;
+		ini = false;
+	}*/
+	if (undet) undet->del();
+	undet = new Q();
+	for (int i = 0; i < 99; i++) for (int j = 0; j < 26; j++) vis[i][j] = 0, exp[i][j][0] = 0, isin[i][j] = 0;
 }
 
-void Add(char* name, char* number, char* birthday, char* email, char* memo)
-{
-	record* r = new record(name, number, birthday, email, memo);
-	for (int j = 0; j < 5; j++) {
-		r->hanchors[j] = inserth(hashes[j], r, r->data[j]);
-		r->lanchors[j] = r->hanchors[j]->records->head;
+bool updateCell(int row, int col, char equation[LENGTH], int value[HEIGHT][WIDTH]) {
+	if (equation[0] == '=') {
+		equation++;
 	}
-}
-
-int Delete(FIELD field, char* str)
-{
-	int res = 0;
-	int hh = hash(str);
-	hnode* hn = findh(hashes[field], str, hh);
-	if (hn) if (hn->records->count > 0) {
-		res = hn->records->count;
-		remove_refs(hn->records->head, field);
-		hn->records->del();
-		hn->del(hashes[field][hh]);
-		hn = nullptr;
-	}
-	return res;
-}
-
-int Change(FIELD field, char* str, FIELD changefield, char* changestr)
-{
-	int res = 0;
-	int hh = hash(str);
-	hnode* hn = findh(hashes[field], str, hh);
-	if (hn) if (hn->records->count > 0) {
-		res = hn->records->count;
-		lnode* curr = hn->records->head;
-		int nhh = hash(changestr);
+	{
+		//work on to free here
+		cpy(exp[row][col], equation);
+		bool flg = eval(row, col, value);
+		if (!flg) undet->push(compress(row, col));
+		int r, c;
+		lnode* curr = undet->head;
+		lnode* end = undet->tail;
+		/*while (curr = undet->pop()) {
+			decompress(curr->val, r, c);
+			bool ff = eval(r, c, value);
+			if (curr == end) {
+				delete curr;
+				break;
+			}
+			delete curr;
+		}*/
+		curr = undet->head;
 		while (curr) {
-			cpy(curr->data->data[changefield], changestr);
-			lnode* currln = curr->data->lanchors[changefield];
-			hnode* currhn = curr->data->hanchors[changefield];
-
-			if (currln->next) currln->next->prev = currln->prev;
-			if (currln->prev) currln->prev->next = currln->next;
-			else currhn->records->head = curr->next;
-			currhn->records->count--;
-
-			curr->data->hanchors[changefield] = inserth(hashes[changefield], curr->data, changestr);
-			curr->data->lanchors[changefield] = curr->data->hanchors[changefield]->records->head;
-
+			decompress(curr->val, r, c);
+			value[r][c] = undet->count;
 			curr = curr->next;
+			flg = false;
 		}
+		return flg;
 	}
-	return res;
-}
-
-RESULT Search(FIELD field, char* str, FIELD returnfield)
-{
-	RESULT r;
-	r.count = 0;
-	r.str[0] = 0;
-
-	int hh = hash(str);
-	hnode* hn = findh(hashes[field], str, hh);
-	if (hn) if (hn->records->count > 0) {
-		r.count = hn->records->count;
-		if (r.count == 1) {
-			cpy(r.str, hn->records->head->data->data[returnfield]);
-		}
-	}
-
-	return r;
 }
 
 //int main() {
-//	int hh = hash("AsdADSsadsadas");
+//	int l, r, n;
+//	n = compress(0, 1);
+//	decompress(n, l, r);
 //	return 0;
 //}
