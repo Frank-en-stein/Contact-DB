@@ -3,191 +3,180 @@
 #define LENGTH	200
 const int THRESHOLD = 100000007;
 
+template <typename A, typename B>
+struct pair {
+	A r;
+	B c;
+	pair(A a, B b) {
+		r = a;
+		c = b;
+	}
+	bool equals(pair<A, B>* dummy) {
+		return r == dummy->r && c == dummy->c;
+	}
+};
+
+template <typename T>
 struct lnode {
 	lnode* next;
-	int val;
+	lnode* prev;
+	T data;
+	lnode() { next = prev = nullptr; }
+	lnode(T data, lnode<T>* prev, lnode<T>* next) { this->next = next; this->prev = prev; this->data = data; }
 };
-bool isin[HEIGHT][WIDTH];
 
-int compress(int l, int r) {
-	return (l <<= 16) | r;
-}
-
-void decompress(int n, int &l, int &r) {
-	r = n & (0x00ff);
-	l = (n >> 16) & (0x00ff);
-}
-
-class Q {
+template <typename T>
+class list {
 public:
-	lnode* head;
-	lnode* tail;
-	int count = 0;
-	Q() {
-		head = tail = nullptr;
+	lnode<T> *head;
+	int count;
+	list() {
+		head = new lnode<T>();
 		count = 0;
 	}
-	void push(int n) {
-		int r, c;
-		decompress(n, r, c);
-		if(isin[r][c]) return;
-		isin[r][c] = 1;
-		lnode* tmp = new lnode();
-		tmp->val = n;
-		tmp->next = nullptr;
-		if (tail) tail->next = tmp;
-		else head = tmp;
-		tail = tmp;
+	void insert(T n) {
+		lnode<T> *tmp = new lnode<T>(n, head, head->next);
+		if (head->next) head->next->prev = tmp;
+		head->next = tmp;
 		count++;
 	}
-	lnode* pop() {
-		if (!head) return nullptr;
-		lnode* tmp = head;
-		int r, c;
-		decompress(head->val, r, c);
-		isin[r][c] = 0;
-		if (head) head = head->next;
-		if (!head) tail = nullptr;
+	void del(lnode<T>* node) {
+		node->prev->next = node->next;
+		if (node->next) node->next->prev = node->prev;
+		delete node;
 		count--;
-		return tmp;
 	}
-	void del(int n) {
-		lnode* curr = head;
-		lnode* prev = head;
+	void del(T p) {
+		lnode<T>* curr = head->next;
 		while (curr) {
-			if (curr->val == n) {
-				count--;
-				if (prev) prev->next = curr->next;
-				else head = curr->next;
-				return;
+			if (curr->data->equals(p)) {
+				del(curr);
+				break;
 			}
-			prev = curr;
 			curr = curr->next;
 		}
 	}
-	void del() {
+	~list() {
 		count = 0;
-		lnode* tmp = head;
+		head = head->next;
 		while (head) {
-			tmp = head;
-			int r, c;
-			decompress(head->val, r, c);
-			isin[r][c] = 0;
+			lnode<T>* tmp = head;
 			head = head->next;
-			delete tmp;
+			delete head;
 		}
 	}
 };
 
-bool vis[HEIGHT][WIDTH];
-char exp[HEIGHT][WIDTH][LENGTH+1];
-Q* undet = nullptr;
-
-int str2num(char* str, int &len) {
-	int res = 0;
-	for (int i = str[0]=='-'; str[i] != 0 && str[i]>='0' && str[i]<='9'; i++) {
-		res *= 10;
-		res += str[i] - '0';
-		len++;
-	}
-	if (str[0] == '-') res *= -1;
-	return res;
-}
-
 void cpy(char a[], char* b) {
 	int i = 0;
-	for (i = 0; b[i] != 0; i++) a[i] = b[i];
+	for (; b[i] != 0; i++) a[i] = b[i];
 	a[i] = 0;
 }
 
+int str2num(char* str, int& i) {
+	int res = 0;
+	for (i = 0; str[i] >= '0' && str[i] <= '9'; i++) {
+		res *= 10;
+		res += str[i] - '0';
+	}
+	return res;
+}
+
+list<pair<int, int>* >* undet;
+char table[HEIGHT][WIDTH][LENGTH+1];
+bool visited[HEIGHT][WIDTH];
+bool isdet[HEIGHT][WIDTH];
+
+bool eval(int r, int c, int value[HEIGHT][WIDTH]);
+
+void updateDependents(int r, int c, int value[HEIGHT][WIDTH]) {
+	if (visited[r][c]) return;
+	char* eq = table[r][c];
+	while (eq[0]) {
+		if (eq[0] == '-' || eq[0] == '+') eq++;
+		if (eq[0] >= 'A' && eq[0] <= 'Z') {
+			int ll = 0;
+			int cc = eq[0] - 'A';
+			int rr = str2num(++eq, ll) - 1;
+			eq += ll;
+			if (!eval(rr, cc, value)) {
+				if (isdet[rr][cc]) isdet[rr][cc] = false, undet->insert(new pair<int, int>(rr, cc));
+			}
+			else {
+				if (!isdet[rr][cc]) isdet[rr][cc] = true, undet->del(new pair<int, int>(rr, cc));
+			}
+		}
+		else eq++;
+	}
+}
+
 bool eval(int r, int c, int value[HEIGHT][WIDTH]) {
-	if (vis[r][c]) return false;
-	bool flag = true;
-	vis[r][c] = 1;
-	char *eq = exp[r][c];
-	bool isPlus = true;
-	int expval = (eq[0] ? 0 : value[r][c]);
-	//if (eq[0] == 0) flag = false;
+	if (visited[r][c]) return false;
+	visited[r][c] = true;
+	char* eq = table[r][c];
+	bool isPlus = true, flag = true;
+	int expval = 0;
+	//if (!eq[0]) flag = false;
 	while (eq[0]) {
 		if (eq[0] == '-' || eq[0] == '+') {
-			isPlus = eq[0] == '+';
+			if (eq[0] == '-') isPlus = false; else if (eq[0] == '+') isPlus = true;
 			eq++;
 			continue;
 		}
-		int ev = 0;
+
+		int val = 0, jmp = 0;
 		if (eq[0] >= 'A' && eq[0] <= 'Z') {
-			int jmp = 0;
+			int ll = 0;
 			int cc = eq[0] - 'A';
-			int rr = str2num(++eq, jmp) - 1;
-			eq += jmp;
+			int rr = str2num(++eq, ll) - 1;
+			eq += ll;
 			if (!eval(rr, cc, value)) {
+				if (isdet[rr][cc]) isdet[rr][cc] = false, undet->insert(new pair<int, int>(rr, cc));
 				flag = false;
-				undet->push(compress(rr, cc));
 			}
-			else ev = value[rr][cc];
+			else {
+				if (!isdet[rr][cc]) isdet[rr][cc] = true, undet->del(new pair<int, int>(rr, cc));
+			}
+			val = value[rr][cc];
 		}
-		else {
-			int jmp = 0;
-			ev = str2num(eq, jmp);
-			eq += jmp;
-		}
-		expval = (isPlus ? expval + ev : expval - ev) % THRESHOLD;
+		else val = str2num(eq, jmp);
+		eq += jmp;
+		if (!isPlus) val *= -1;
+		expval += val;
+		expval %= THRESHOLD;
 	}
 	if (flag) {
 		value[r][c] = expval;
-		if (isin[r][c]) undet->del(compress(r,c));
-		isin[r][c] = 0;
+		//updateDependents(r, c, value);
 	}
-	vis[r][c] = 0;
+	visited[r][c] = false;
 	return flag;
 }
 
 void initTable() {
-	/*static bool ini = false;
-	if (!ini) {
-		for (int i = 0; i < 26; i++) for (int j = 0; j < 99; j++) vis[i][j] = 0;
-		ini = false;
-	}*/
-	if (undet) undet->del();
-	undet = new Q();
-	for (int i = 0; i < 99; i++) for (int j = 0; j < 26; j++) vis[i][j] = 0, exp[i][j][0] = 0, isin[i][j] = 0;
+	static int cas = 0;
+	cas++;
+	undet = new list<pair<int, int>* >();
+	if (cas>1) for (int i = 0; i < HEIGHT; i++) for (int j = 0; j < WIDTH; j++) table[i][j][0] = 0;
+	for (int i = 0; i < HEIGHT; i++) for (int j = 0; j < WIDTH; j++) visited[i][j] = false, isdet[i][j] = true;
 }
 
 bool updateCell(int row, int col, char equation[LENGTH], int value[HEIGHT][WIDTH]) {
-	if (equation[0] == '=') {
-		equation++;
+	if (equation[0] == '=') equation++;
+	cpy(table[row][col], equation);
+	bool flg = eval(row, col, value);
+	if (!flg) {
+		if (isdet[row][col]) isdet[row][col] = false, undet->insert(new pair<int, int>(row, col));
 	}
-	{
-		//work on to free here
-		cpy(exp[row][col], equation);
-		bool flg = eval(row, col, value);
-		if (!flg) undet->push(compress(row, col));
-		int r, c;
-		lnode* curr = undet->head;
-		lnode* end = undet->tail;
-		/*while (curr = undet->pop()) {
-			decompress(curr->val, r, c);
-			bool ff = eval(r, c, value);
-			if (curr == end) {
-				delete curr;
-				break;
-			}
-			delete curr;
-		}*/
-		curr = undet->head;
-		while (curr) {
-			decompress(curr->val, r, c);
-			value[r][c] = undet->count;
-			curr = curr->next;
-			flg = false;
-		}
-		return flg;
+	else {
+		if (!isdet[row][col]) isdet[row][col] = true, undet->del(new pair<int, int>(row, col));
 	}
+	lnode<pair<int, int>* >* curr = undet->head->next;
+	while (curr) {
+		int r = curr->data->r;
+		int c = curr->data->c;
+		value[r][c] = undet->count;
+		curr = curr->next;
+	}
+	return undet->count == 0;
 }
-
-//int main() {
-//	int l, r, n;
-//	n = compress(0, 1);
-//	decompress(n, l, r);
-//	return 0;
-//}
