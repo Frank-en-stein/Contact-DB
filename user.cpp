@@ -1,182 +1,187 @@
-#define WIDTH	26
-#define HEIGHT	99
-#define LENGTH	200
-const int THRESHOLD = 100000007;
+const int MAX = 100000;
 
-template <typename A, typename B>
-struct pair {
-	A r;
-	B c;
-	pair(A a, B b) {
-		r = a;
-		c = b;
+inline int abs(int k) {
+	return (k < 0 ? -k : k);
+}
+
+struct lnode;
+struct bstnode;
+
+struct datanode {
+	int val;
+	lnode* listnode;
+	bstnode* diffnode;
+	bstnode* valnode;
+};
+
+struct bstnode {
+	int val;
+	datanode* data;
+	bstnode* left;
+	bstnode* right;
+	bstnode* par;
+	bstnode(datanode* d, int n, bstnode* l, bstnode* r) { data = d, val = n, left = l, right = r; }
+};
+
+class bst {
+public:
+	bstnode* root;
+	bst() { root = nullptr; }
+
+	bstnode* push(int n, datanode* d, bstnode* curr, bstnode* &res) {
+		if (!curr) return res = new bstnode(d, n, nullptr, nullptr);
+		if (n <= curr->val) curr->left = push(n, d, curr->left, res), curr->left->par = curr;
+		else curr->right = push(n, d, curr->right, res), curr->right->par = curr;
 	}
-	bool equals(pair<A, B>* dummy) {
-		return r == dummy->r && c == dummy->c;
+	datanode* remove_closest(int tr) {
+		bstnode* curr = root;
+		int d = MAX+10;
+		bstnode* r = root;
+		while (curr) {
+			if (abs(tr - curr->val) < d) {
+				d = abs(tr - curr->val);
+				r = curr;
+			}
+			if (tr < curr->val) curr = curr->left;
+			else curr = curr->right;
+		}
+		return remove(r);
+	}
+	datanode* remove_smaller(int tr) {
+		bstnode* curr = root;
+		int d = MAX + 10;
+		bstnode* r = nullptr;
+		while (curr) {
+			if (tr >= curr->val && (tr - curr->val) < d) {
+				d = abs(tr - curr->val);
+				r = curr;
+			}
+			if (tr < curr->val) curr = curr->left;
+			else curr = curr->right;
+		}
+		if (r) return remove(r);
+		else return nullptr;
+	}
+	datanode* remove_greater(int tr) {
+		bstnode* curr = root;
+		int d = MAX + 10;
+		bstnode* r = nullptr;
+		while (curr) {
+			if (tr <= curr->val && (tr - curr->val) < d) {
+				d = abs(tr - curr->val);
+				r = curr;
+			}
+			if (tr < curr->val) curr = curr->left;
+			else curr = curr->right;
+		}
+		if (r) return remove(r);
+		else return nullptr;
+	}
+	datanode* remove(bstnode* tmp) {
+		if (tmp == root) {
+			root = nullptr;
+			return tmp->data;
+		}
+		bstnode* curr = tmp;
+		bstnode* pred = nullptr;
+		if (curr->right) {
+			pred = curr->right;
+			while (pred->left) pred = pred->left;
+			pred->left = curr->left;
+			if (curr->right != pred) pred->right = curr->right;
+		}
+		else pred = curr->left;
+		if (!curr->par) root = pred;
+		else if (curr->par->left == curr) curr->par->left = pred;
+		else curr->par->right = pred;
+
+		return curr->data;
 	}
 };
 
-template <typename T>
 struct lnode {
-	lnode* next;
+	int val;
+	datanode* data;
 	lnode* prev;
-	T data;
-	lnode() { next = prev = nullptr; }
-	lnode(T data, lnode<T>* prev, lnode<T>* next) { this->next = next; this->prev = prev; this->data = data; }
+	lnode* next;
+	lnode(datanode* d, int n, lnode* prv, lnode* nxt) {
+		data = d;
+		val = n;
+		prev = prv;
+		next = nxt;
+	}
 };
 
-template <typename T>
 class list {
 public:
-	lnode<T> *head;
+	lnode *head, *tail;
 	int count;
-	list() {
-		head = new lnode<T>();
-		count = 0;
+	list() { head = new lnode(nullptr, -1, nullptr, nullptr); tail = head; count = 0; }
+	lnode* push(int n, datanode* d) {
+		lnode* tmp = new lnode(d, n, tail, nullptr);
+		tail->next = tmp;
+		tail = tmp;
+		return tmp;
 	}
-	void insert(T n) {
-		lnode<T> *tmp = new lnode<T>(n, head, head->next);
-		if (head->next) head->next->prev = tmp;
-		head->next = tmp;
-		count++;
+	datanode* pop() {
+		lnode* tmp = head->next;
+		datanode* r = tmp->data;
+		remove(tmp);
+		return r;
 	}
-	void del(lnode<T>* node) {
+	void remove(lnode* node) {
+		if (node == tail) tail = node->prev;
 		node->prev->next = node->next;
 		if (node->next) node->next->prev = node->prev;
-		delete node;
-		count--;
-	}
-	void del(T p) {
-		lnode<T>* curr = head->next;
-		while (curr) {
-			if (curr->data->equals(p)) {
-				del(curr);
-				break;
-			}
-			curr = curr->next;
-		}
-	}
-	~list() {
-		count = 0;
-		head = head->next;
-		while (head) {
-			lnode<T>* tmp = head;
-			head = head->next;
-			delete head;
-		}
 	}
 };
 
-void cpy(char a[], char* b) {
-	int i = 0;
-	for (; b[i] != 0; i++) a[i] = b[i];
-	a[i] = 0;
+list* fifo;
+//bst* dsorted;
+bst* vsorted;
+int lasthead;
+bool islookingleft;
+
+void init(int track_size, int head){
+	fifo = new list();
+	//dsorted = new bst();
+	vsorted = new bst();
+	lasthead = head;
+	islookingleft = true;
 }
 
-int str2num(char* str, int& i) {
-	int res = 0;
-	for (i = 0; str[i] >= '0' && str[i] <= '9'; i++) {
-		res *= 10;
-		res += str[i] - '0';
-	}
-	return res;
+void request(int track){
+	datanode* d = new datanode();
+	d->val = track;
+	d->listnode = fifo->push(track, d);
+	//d->diffnode = dsorted->push(abs(lasthead - track), d);
+	vsorted->root = vsorted->push(track, d, vsorted->root, d->valnode);
 }
 
-list<pair<int, int>* >* undet;
-char table[HEIGHT][WIDTH][LENGTH+1];
-bool visited[HEIGHT][WIDTH];
-bool isdet[HEIGHT][WIDTH];
-
-bool eval(int r, int c, int value[HEIGHT][WIDTH]);
-
-void updateDependents(int r, int c, int value[HEIGHT][WIDTH]) {
-	if (visited[r][c]) return;
-	char* eq = table[r][c];
-	while (eq[0]) {
-		if (eq[0] == '-' || eq[0] == '+') eq++;
-		if (eq[0] >= 'A' && eq[0] <= 'Z') {
-			int ll = 0;
-			int cc = eq[0] - 'A';
-			int rr = str2num(++eq, ll) - 1;
-			eq += ll;
-			if (!eval(rr, cc, value)) {
-				if (isdet[rr][cc]) isdet[rr][cc] = false, undet->insert(new pair<int, int>(rr, cc));
-			}
-			else {
-				if (!isdet[rr][cc]) isdet[rr][cc] = true, undet->del(new pair<int, int>(rr, cc));
-			}
-		}
-		else eq++;
-	}
+int fcfs(){
+	datanode* r = fifo->pop();
+	//dsorted->remove(r->diffnode);
+	vsorted->remove(r->valnode);
+	return lasthead = r->val;
 }
 
-bool eval(int r, int c, int value[HEIGHT][WIDTH]) {
-	if (visited[r][c]) return false;
-	visited[r][c] = true;
-	char* eq = table[r][c];
-	bool isPlus = true, flag = true;
-	int expval = 0;
-	//if (!eq[0]) flag = false;
-	while (eq[0]) {
-		if (eq[0] == '-' || eq[0] == '+') {
-			if (eq[0] == '-') isPlus = false; else if (eq[0] == '+') isPlus = true;
-			eq++;
-			continue;
-		}
-
-		int val = 0, jmp = 0;
-		if (eq[0] >= 'A' && eq[0] <= 'Z') {
-			int ll = 0;
-			int cc = eq[0] - 'A';
-			int rr = str2num(++eq, ll) - 1;
-			eq += ll;
-			if (!eval(rr, cc, value)) {
-				if (isdet[rr][cc]) isdet[rr][cc] = false, undet->insert(new pair<int, int>(rr, cc));
-				flag = false;
-			}
-			else {
-				if (!isdet[rr][cc]) isdet[rr][cc] = true, undet->del(new pair<int, int>(rr, cc));
-			}
-			val = value[rr][cc];
-		}
-		else val = str2num(eq, jmp);
-		eq += jmp;
-		if (!isPlus) val *= -1;
-		expval += val;
-		expval %= THRESHOLD;
-	}
-	if (flag) {
-		value[r][c] = expval;
-		//updateDependents(r, c, value);
-	}
-	visited[r][c] = false;
-	return flag;
+int sstf(){
+	datanode* r = vsorted->remove_closest(lasthead);
+	fifo->remove(r->listnode);
+	return lasthead = r->val;
 }
 
-void initTable() {
-	static int cas = 0;
-	cas++;
-	undet = new list<pair<int, int>* >();
-	if (cas>1) for (int i = 0; i < HEIGHT; i++) for (int j = 0; j < WIDTH; j++) table[i][j][0] = 0;
-	for (int i = 0; i < HEIGHT; i++) for (int j = 0; j < WIDTH; j++) visited[i][j] = false, isdet[i][j] = true;
+int look(){
+	datanode* r = (islookingleft ? vsorted->remove_smaller(lasthead) : vsorted->remove_greater(lasthead));
+	if (!r) islookingleft = !islookingleft, r = (islookingleft ? vsorted->remove_smaller(lasthead) : vsorted->remove_greater(lasthead));
+	fifo->remove(r->listnode);
+	return lasthead = r->val;
 }
 
-bool updateCell(int row, int col, char equation[LENGTH], int value[HEIGHT][WIDTH]) {
-	if (equation[0] == '=') equation++;
-	cpy(table[row][col], equation);
-	bool flg = eval(row, col, value);
-	if (!flg) {
-		if (isdet[row][col]) isdet[row][col] = false, undet->insert(new pair<int, int>(row, col));
-	}
-	else {
-		if (!isdet[row][col]) isdet[row][col] = true, undet->del(new pair<int, int>(row, col));
-	}
-	lnode<pair<int, int>* >* curr = undet->head->next;
-	while (curr) {
-		int r = curr->data->r;
-		int c = curr->data->c;
-		value[r][c] = undet->count;
-		curr = curr->next;
-	}
-	return undet->count == 0;
+int clook(){
+	datanode* r = vsorted->remove_smaller(lasthead);
+	if (!r) r = vsorted->remove_smaller(MAX + 100);
+	fifo->remove(r->listnode);
+	return lasthead = r->val;
 }
+
