@@ -1,162 +1,114 @@
-#include <malloc.h>
+#define BUCKET_SIZE 1
+#define MAX_PRICE  16000
 
-inline int kabs(int n) {
-	return (n < 0 ? -n : n);
-}
+struct node {
+	node* next = nullptr;
+	int val;
+	int w;
+};
 
-const int MAX = 100000;
-int count = 1000000009;
-
-typedef struct node {
-	int val, prior, size;
-	struct node *l, *r;
-}node;
-typedef node* pnode;
-int sz(pnode t) {
-	return t ? t->size : 0;
-}
-void upd_sz(pnode t) {
-	if (t) t->size = sz(t->l) + 1 + sz(t->r);
-}
-void split(pnode t, pnode &l, pnode &r, int key) {
-	if (!t) l = r = nullptr;
-	else if (t->val <= key) split(t->r, t->r, r, key), l = t; //elem=key comes in l
-	else split(t->l, l, t->l, key), r = t;
-	upd_sz(t);
-}
-void merge(pnode &t, pnode l, pnode r) {
-	if (!l || !r) t = l ? l : r;
-	else if (l->prior > r->prior)merge(l->r, l->r, r), t = l;
-	else merge(r->l, l, r->l), t = r;
-	upd_sz(t);
-}
-
-void insert(pnode &t, pnode it) {
-	if (!t) t = it;
-	else if (it->prior>t->prior) split(t, it->l, it->r, it->val), t = it;
-	else insert(t->val <= it->val ? t->r : t->l, it);
-	upd_sz(t);
-}
-void erase(pnode &t, int key) {
-	if (!t)return;
-	else if (t->val == key) { pnode temp = t; merge(t, t->l, t->r); free(temp); }
-	else erase(t->val<key ? t->r : t->l, key);
-	upd_sz(t);
-}
-pnode makenode(int val) {
-	pnode ret = (pnode)malloc(sizeof(node));
-	ret->val = val; ret->size = 1; ret->prior = count--; ret->l = ret->r = NULL;
-	return ret;
-}
-
-pnode root;
-bool lookingLeft;
-int lasthead;
-
-int remove_closest(int tr) {
-	pnode curr = root;
-	int d = MAX + 10;
-	pnode r = nullptr;
-	while (curr) {
-		if (kabs(tr - curr->val) < d || (kabs(tr - curr->val) == d && curr->val < r->val)) {
-			d = kabs(tr - curr->val);
-			r = curr;
+class list {
+public:
+	node* head;
+	node* tail;
+	int count = 0;
+	list() { head = new node(); tail = head; }
+	void push(int val, int w) {
+		node* tmp = new node();
+		tmp->val = val;
+		tmp->w = w;
+		tail->next = tmp;
+		tail = tmp;
+		count++;
+	}
+	void insertAfter(node* nd, int val, int w) {
+		node* tmp = new node();
+		tmp->val = val;
+		tmp->w = w;
+		tmp->next = nd->next;
+		nd->next = tmp;
+		if (nd == tail) tail = tmp;
+		count++;
+	}
+	void pop() {
+		node* tmp = head->next;
+		head->next = head->next->next;
+		delete tmp;
+		if (head->next == nullptr) tail = head;
+		count--;
+	}
+	node* top() {
+		return tail;
+	}
+	bool isEmpty() {
+		return head->next == nullptr;
+	}
+	int countUntil(int price, int p1, int p2, int w1, int w2) {
+		int cc = 0;
+		node* curr = head->next;
+		node* prev = head;
+		while (curr) {
+			if (curr->val < price) {
+				if (curr->w >= w1 && curr->w <= w2) {
+					cc++;
+					if (curr->val >= p1 && curr->val <= p2) prev->next = curr->next, count--;
+				}
+				prev = curr;
+				curr = curr->next;
+			}
+			else break;
 		}
-		if (tr < curr->val) curr = curr->l;
-		else curr = curr->r;
+		return cc;
 	}
-	if (r) {
-		int res = r->val;
-		erase(root, res);
-		return res;
-	}
-	else {
-		return MAX+10;
-	}
-}
-int remove_smaller(int tr) {
-	pnode curr = root;
-	int d = MAX + 10;
-	pnode r = nullptr;
-	while (curr) {
-		if (tr >= curr->val && (tr - curr->val) < d) {
-			d = kabs(tr - curr->val);
-			r = curr;
+	int countInRange(int w1, int w2, int p1, int p2) {
+		int cc = 0;
+		node* curr = head->next;
+		node* prev = head;
+		while (curr) {
+			if (curr->w >= w1 && curr->w <= w2) {
+				cc++;
+				if (curr->val >= p1 && curr->val <= p2) prev->next = curr->next, count--;
+			}
+			prev = curr;
+			curr = curr->next;
 		}
-		if (tr < curr->val) curr = curr->l;
-		else curr = curr->r;
+		return cc;
 	}
-	if (r) {
-		int res = r->val;
-		erase(root, res);
-		return res;
-	}
-	else {
-		return MAX + 10;
-	}
+};
+
+list* skiplist[MAX_PRICE / BUCKET_SIZE + 1];
+
+void init()
+{
+	for (int i = 0; i < MAX_PRICE / BUCKET_SIZE + 1; i++) skiplist[i] = new list();
 }
-int remove_greater(int tr) {
-	if (tr == 101) {
-		int uu = 0;
-	}
-	pnode curr = root;
-	int d = MAX + 10;
-	pnode r = nullptr;
-	while (curr) {
-		if (tr <= curr->val && (tr - curr->val) < d) {
-			d = kabs(tr - curr->val);
-			r = curr;
+
+void add(int price, int weight)
+{
+	int idx = price / BUCKET_SIZE;
+	node* curr = skiplist[idx]->head->next;
+	node* prev = skiplist[idx]->head;
+	while (1) {
+		if (curr) {
+			if (curr->val < price) {
+				prev = curr;
+				curr = curr->next;
+			}
+			else break;
 		}
-		if (tr < curr->val) curr = curr->l;
-		else curr = curr->r;
+		else break;
 	}
-	if (r) {
-		int res = r->val;
-		erase(root, res);
-		return res;
-	}
-	else {
-		return MAX + 10;
-	}
+	skiplist[idx]->insertAfter(prev, price, weight);
 }
 
-void init(int track_size, int head) {
-	count = 1000000009;
-	root = nullptr;
-	lookingLeft = true;
-	lasthead = head;
-}
+int search(int price1, int price2, int weight1, int weight2)
+{
+	int lidx = price1 / BUCKET_SIZE;
+	int ridx = price2 / BUCKET_SIZE;
 
-void request(int track) {
-	pnode tmp = makenode(track);
-	insert(root, tmp);
+	int count = 0;
+	for (int i = lidx; i < ridx; i++) count += skiplist[i]->countInRange(weight1, weight2, price1, price2);
+	count -= skiplist[lidx]->countUntil(price1, price1, price2, weight1, weight2);
+	count += skiplist[ridx]->countUntil(price2 + 1, price1, price2, weight1, weight2);
+	return count;
 }
-
-int fcfs() {
-	int r = root->val;
-	erase(root, r);
-	return lasthead = r;
-}
-
-int sstf() {
-	int r = remove_closest(lasthead);
-	return lasthead = r;
-}
-
-int look() {
-	int r = (lookingLeft ? remove_smaller(lasthead) : remove_greater(lasthead));
-	if (r == MAX + 10) {
-		lookingLeft = !lookingLeft;
-		r = (lookingLeft ? remove_smaller(lasthead) : remove_greater(lasthead));
-	}
-	return lasthead = r;
-}
-
-int clook() {
-	int r = remove_smaller(lasthead);
-	if (r == MAX + 10) {
-		r = remove_smaller(MAX+10);
-	}
-	return lasthead = r;
-}
-
